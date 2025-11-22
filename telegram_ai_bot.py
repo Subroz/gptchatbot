@@ -62,7 +62,8 @@ class BotData:
                 'authorized_groups': [],
                 'user_preferences': {},
                 'usage_stats': {},
-                'banned_users': []
+                'banned_users': [],
+                'user_api_keys': {}
             }
     
     def save_data(self):
@@ -150,6 +151,34 @@ class BotData:
         stats['by_model'][model]['requests'] += 1
         stats['by_model'][model]['tokens'] += tokens
         self.save_data()
+    
+    def set_user_api_key(self, user_id: int, api_key: str):
+        """Set user's personal OpenAI API key"""
+        if 'user_api_keys' not in self.data:
+            self.data['user_api_keys'] = {}
+        self.data['user_api_keys'][str(user_id)] = api_key
+        self.save_data()
+    
+    def get_user_api_key(self, user_id: int) -> Optional[str]:
+        """Get user's personal OpenAI API key"""
+        if 'user_api_keys' not in self.data:
+            self.data['user_api_keys'] = {}
+        return self.data['user_api_keys'].get(str(user_id))
+    
+    def remove_user_api_key(self, user_id: int):
+        """Remove user's personal OpenAI API key"""
+        if 'user_api_keys' not in self.data:
+            self.data['user_api_keys'] = {}
+        user_id_str = str(user_id)
+        if user_id_str in self.data['user_api_keys']:
+            del self.data['user_api_keys'][user_id_str]
+            self.save_data()
+    
+    def has_user_api_key(self, user_id: int) -> bool:
+        """Check if user has a personal API key set"""
+        if 'user_api_keys' not in self.data:
+            self.data['user_api_keys'] = {}
+        return str(user_id) in self.data['user_api_keys']
 
 # Initialize bot data
 bot_data = BotData()
@@ -196,10 +225,17 @@ def create_main_menu() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(buttons)
 
-async def call_openai_api(messages: list, model: str, max_tokens: int = 2000) -> tuple:
+async def call_openai_api(messages: list, model: str, user_id: int = None, max_tokens: int = 2000) -> tuple:
     """Call OpenAI API and return response with token count"""
     try:
-        response = openai_client.chat.completions.create(
+        user_api_key = bot_data.get_user_api_key(user_id) if user_id else None
+        
+        if user_api_key:
+            client = OpenAI(api_key=user_api_key)
+        else:
+            client = openai_client
+        
+        response = client.chat.completions.create(
             model=model,
             messages=messages,
             max_tokens=max_tokens,
@@ -309,7 +345,7 @@ async def ask_command(client: Client, message: Message):
             {"role": "user", "content": question_text}
         ]
         
-        response, tokens = await call_openai_api(messages, model)
+        response, tokens = await call_openai_api(messages, model, user_id)
         
         # Log usage
         bot_data.log_usage(user_id, model, tokens)
@@ -367,6 +403,11 @@ async def help_command(client: Client, message: Message):
 • `/stats` - View your usage statistics
 • `/help` - Show this help message
 
+**API Key Management:**
+• `/setapikey <key>` - Set your personal OpenAI API key
+• `/removeapikey` - Remove your API key
+• `/myapikey` - Check API key status
+
 **Inline Mode:**
 Type `@botusername your question` in any chat to get instant AI responses!
 
@@ -388,6 +429,99 @@ Type `@botusername your question` in any chat to get instant AI responses!
     help_text += "\n🔥 Powered by OpenAI's cutting-edge AI technology!"
     
     await message.reply_text(help_text)
+
+@app.on_message(filters.command("setapikey"))
+async def setapikey_command(client: Client, message: Message):
+    """Set personal OpenAI API key"""
+    user_id = message.from_user.id
+    
+    if not bot_data.is_user_authorized(user_id):
+        await message.reply_text("❌ Unauthorized access.")
+        return
+    
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.reply_text(
+            "**🔑 Set Your Personal OpenAI API Key**\n\n"
+            "Usage: `/setapikey sk-your-api-key-here`\n\n"
+            "⚠️ **Important Security Information:**\n"
+            "• Your API key will be stored in plaintext in the bot's local database\n"
+            "• Only you can use your API key through this bot\n"
+            "• The bot owner has access to the database file\n"
+            "• Only use this if you trust the bot owner\n"
+            "• Delete your message after setting the key\n"
+            "• Use `/removeapikey` to remove it anytime\n\n"
+            "**Why set your own key?**\n"
+            "• Use your own OpenAI credits\n"
+            "• No shared rate limits\n"
+            "• Full control over your usage"
+        )
+        return
+    
+    api_key = parts[1].strip()
+    
+    if not api_key.startswith('sk-'):
+        await message.reply_text("❌ Invalid API key format. OpenAI keys start with 'sk-'")
+        return
+    
+    try:
+        await message.delete()
+    except:
+        pass
+    
+    bot_data.set_user_api_key(user_id, api_key)
+    await client.send_message(
+        user_id,
+        "✅ **API Key Set Successfully!**\n\n"
+        "Your personal OpenAI API key is now active.\n"
+        "All API requests will use your key.\n\n"
+        "Use `/removeapikey` to remove it anytime.\n"
+        "Use `/myapikey` to check your API key status."
+    )
+
+@app.on_message(filters.command("removeapikey"))
+async def removeapikey_command(client: Client, message: Message):
+    """Remove personal OpenAI API key"""
+    user_id = message.from_user.id
+    
+    if not bot_data.is_user_authorized(user_id):
+        await message.reply_text("❌ Unauthorized access.")
+        return
+    
+    if not bot_data.has_user_api_key(user_id):
+        await message.reply_text("ℹ️ You don't have a personal API key set.")
+        return
+    
+    bot_data.remove_user_api_key(user_id)
+    await message.reply_text(
+        "✅ **API Key Removed**\n\n"
+        "Your personal API key has been removed.\n"
+        "You'll now use the default bot API key."
+    )
+
+@app.on_message(filters.command("myapikey"))
+async def myapikey_command(client: Client, message: Message):
+    """Check API key status"""
+    user_id = message.from_user.id
+    
+    if not bot_data.is_user_authorized(user_id):
+        await message.reply_text("❌ Unauthorized access.")
+        return
+    
+    if bot_data.has_user_api_key(user_id):
+        await message.reply_text(
+            "✅ **Personal API Key Active**\n\n"
+            "You have a personal OpenAI API key configured.\n"
+            "All requests use your own API credits.\n\n"
+            "Use `/removeapikey` to remove it."
+        )
+    else:
+        await message.reply_text(
+            "ℹ️ **Using Default API Key**\n\n"
+            "You're using the bot's default API key.\n\n"
+            "Want to use your own?\n"
+            "Use `/setapikey <your-key>` to set yours."
+        )
 
 # Owner-only commands
 @app.on_message(filters.command("auth") & filters.user(OWNER_ID))
@@ -516,7 +650,7 @@ async def inline_query_handler(client: Client, inline_query: InlineQuery):
             {"role": "user", "content": query}
         ]
         
-        response, tokens = await call_openai_api(messages, model, max_tokens=500)
+        response, tokens = await call_openai_api(messages, model, user_id, max_tokens=500)
         
         # Log usage
         bot_data.log_usage(user_id, model, tokens)
@@ -625,7 +759,8 @@ async def callback_query_handler(client: Client, callback_query: CallbackQuery):
 # Direct message handler (for natural conversation)
 @app.on_message(filters.text & filters.private & ~filters.command([
     "start", "ask", "model", "stats", "help", "auth", "revoke",
-    "authgroup", "revokegroup", "ban", "unban", "broadcast"
+    "authgroup", "revokegroup", "ban", "unban", "broadcast",
+    "setapikey", "removeapikey", "myapikey"
 ]))
 async def natural_conversation_handler(client: Client, message: Message):
     """Handle natural conversation in private chats"""
@@ -648,7 +783,7 @@ async def natural_conversation_handler(client: Client, message: Message):
             {"role": "user", "content": message.text}
         ]
         
-        response, tokens = await call_openai_api(messages, model)
+        response, tokens = await call_openai_api(messages, model, user_id)
         
         # Log usage
         bot_data.log_usage(user_id, model, tokens)
