@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  telegram-ai-bot:
+    build: .
+    container_name: telegram-ai-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./bot.log:/app/bot.log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
