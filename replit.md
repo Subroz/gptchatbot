@@ -11,6 +11,7 @@ Advanced Telegram bot powered by OpenAI's GPT models with inline mode support, u
 - Replaced `pyrogram` with `pyrotgfork` for better compatibility
 - Configured environment secrets for API credentials
 - Set up workflow to auto-run the bot
+- **NEW**: Added personal API key management - users can now use their own OpenAI API keys
 
 ## Project Architecture
 
@@ -21,10 +22,11 @@ Advanced Telegram bot powered by OpenAI's GPT models with inline mode support, u
 
 ### Key Features
 1. **Multiple AI Models**: GPT-4o, GPT-4 Turbo, GPT-3.5, O1 models
-2. **Inline Mode**: Use bot in any chat with @botusername
-3. **Group Support**: Works in authorized groups
-4. **User Management**: Owner can authorize/ban users
-5. **Usage Tracking**: Monitors API usage per user/model
+2. **Personal API Keys**: Users can set their own OpenAI API keys
+3. **Inline Mode**: Use bot in any chat with @botusername
+4. **Group Support**: Works in authorized groups
+5. **User Management**: Owner can authorize/ban users
+6. **Usage Tracking**: Monitors API usage per user/model
 
 ### Environment Secrets
 Configured in Replit Secrets (DO NOT commit to git):
@@ -48,6 +50,11 @@ The bot runs automatically via the "Telegram AI Bot" workflow.
 - `/model` - Change preferred AI model
 - `/stats` - View usage statistics
 - `/help` - Show help information
+
+### API Key Management Commands
+- `/setapikey <key>` - Set your personal OpenAI API key
+- `/removeapikey` - Remove your personal API key
+- `/myapikey` - Check if you have a personal API key configured
 
 ### Owner Commands
 - `/auth <user_id>` - Authorize user
@@ -80,8 +87,18 @@ This project uses `pyrotgfork` instead of the standard `pyrogram` library for be
 
 ### Data Persistence
 - User authorization, preferences, and stats are stored in `bot_data.json`
+- User-provided API keys are stored in plaintext in `bot_data.json`
 - Session data is stored in `.session` files (auto-generated)
 - All sensitive files are excluded via .gitignore
+
+### Personal API Keys
+Users can optionally set their own OpenAI API keys through the bot:
+- Keys are stored in plaintext in the local bot_data.json file
+- Only the specific user can use their own key
+- The bot owner has access to the database file
+- Users should only set their keys if they trust the bot owner
+- When a user has a personal key set, all their requests use that key
+- Otherwise, the default bot API key (from Replit Secrets) is used
 
 ### Monitoring
 - Check Console tab for live bot activity
