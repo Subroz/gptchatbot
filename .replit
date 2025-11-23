@@ -29,4 +29,5 @@ args = "python telegram_ai_bot.py"
 outputType = "console"
 
 [deployment]
-deploymentTarget = "cloudrun"
+deploymentTarget = "vm"
+run = ["python", "telegram_ai_bot.py"]
